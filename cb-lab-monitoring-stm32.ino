@@ -55,9 +55,25 @@ float readAvgVoltage(int pin, bool divider=false) {
 }
 
 float readTurbidity() {
-  float v = readAvgVoltage(TURBIDITY_PIN, true);
-  float ntu = -1120.4f*v*v + 5742.3f*v - 4353.8f;
-  return safeF(ntu < 0 ? 0 : ntu);
+  // 1. Read the raw voltage from the sensor
+  float v = readAvgVoltage(TURBIDITY_PIN, false); 
+
+  // 2. Your custom calibration values
+  float voltClean = 1.5f;    // Voltage in completely clear water (0 NTU)
+  float voltDirty = 2.5f;    // Voltage when completely blocked (Max NTU)
+  float maxNTU    = 3000.0f; // The standard maximum NTU scale for these sensors
+
+  // 3. Failsafes: Keep the reading within bounds
+  // If the voltage drops below 1.5V (e.g., 1.45V), just call it 0 NTU
+  if (v <= voltClean) return 0.0f; 
+  
+  // If the voltage goes above 2.5V (e.g., 2.6V), cap it at 3000 NTU
+  if (v >= voltDirty) return maxNTU;
+
+  // 4. The Calibration Math (Linear Mapping)
+  float ntu = ((v - voltClean) / (voltDirty - voltClean)) * maxNTU;
+  
+  return safeF(ntu);
 }
 
 float readPH() {
