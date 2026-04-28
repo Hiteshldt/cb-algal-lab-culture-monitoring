@@ -390,15 +390,15 @@
             panel2Icon: '💨',
             panel2Keys: ['d1', 'd2'],
             sensors: {
-                'd1': { name: 'Outlet CO2', icon: '😮‍💨', scale: 1,   unit: 'ppm' },
-                'd2': { name: 'Inlet CO2',  icon: '🌬️', scale: 1,   unit: 'ppm' },
+                'd1': { name: 'Co2 - 2',    icon: '😮‍💨', scale: 1,   unit: 'ppm' },
+                'd2': { name: 'Co2 - 1',    icon: '🌬️', scale: 1,   unit: 'ppm' },
                 'd3': { name: 'Water Temp', icon: '🌡️', scale: 100, unit: '°C' },
                 'd4': { name: 'Flow Rate',  icon: '🌊', scale: 10,  unit: 'L/min' },
                 'd5': { name: 'pH Value',   icon: '🧪', scale: 100, unit: '' }
             },
             chartMetrics: [
-                { value: 'd1', label: 'Outlet CO2' },
-                { value: 'd2', label: 'Inlet CO2' },
+                { value: 'd2', label: 'Co2 - 1' },
+                { value: 'd1', label: 'Co2 - 2' },
                 { value: 'd3', label: 'Water Temp' },
                 { value: 'd4', label: 'Flow Rate' },
                 { value: 'd5', label: 'pH Value' }
@@ -566,7 +566,6 @@
         let config = DEVICE_CONFIGS[ACTIVE_DEVICE];
         let aqi = null;
         
-        // Only run AQI engine if the active device supports it
         if(config.hasAQI) {
             let pm25Scale = config.sensors['d5'] ? config.sensors['d5'].scale : 1;
             let pm10Scale = config.sensors['d6'] ? config.sensors['d6'].scale : 1;
@@ -621,7 +620,6 @@
         chartInstance.data.labels = labels;
         chartInstance.data.datasets[0].data = plotData;
         
-        // Chart color changes dynamically for AQI, otherwise defaults to brand blue
         if(selectedMetric === 'aqi' && plotData.length > 0) {
             let latestAqi = plotData[plotData.length - 1];
             let meta = getAQIMeta(latestAqi);
@@ -646,7 +644,6 @@
         document.getElementById('loadingState').style.display = 'none';
         document.getElementById('dataContainers').style.display = 'grid';
 
-        // Conditional AQI Rendering
         if(config.hasAQI && aqi !== null) {
             let meta = getAQIMeta(aqi);
             document.getElementById('aqiValueDisplay').textContent = aqi;
@@ -664,7 +661,6 @@
             arcElement.style.stroke = meta.color;
         }
 
-        // Render Sensor Cards dynamically via Active Config
         Object.keys(config.sensors).forEach(key => {
             if (data[key] !== undefined && data[key] !== null) {
                 const sensorConf = config.sensors[key];
@@ -693,7 +689,6 @@
                         </div>
                     `;
                     
-                    // Route to Panel 1 (Water/Liquid) or Panel 2 (Air/Gas)
                     if(config.panel1Keys.includes(key)) {
                         document.getElementById('waterGrid').appendChild(card);
                     } else if(config.panel2Keys.includes(key)) {
