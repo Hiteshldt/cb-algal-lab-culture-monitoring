@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carbelim Lab Monitoring</title>
+    <title>Enterprise Lab Monitoring</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
 
@@ -113,23 +114,38 @@
         .disconnected .status-indicator { background: var(--status-error); }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
 
-        /* Meta Banner */
+        /* Meta Banner & Controls */
         .meta-banner {
             display: flex; gap: 24px; background: var(--bg-surface); padding: 16px 20px;
             border-radius: var(--radius-lg); border: 1px solid var(--border-color); margin-bottom: 20px; box-shadow: var(--shadow-sm);
+            align-items: center;
         }
         .meta-group { display: flex; flex-direction: column; gap: 2px; }
         .meta-label { font-size: 10px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; }
         .meta-value { font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-        .meta-device { color: var(--brand-primary); background: var(--brand-light); padding: 2px 8px; border-radius: 6px; border: 1px solid #bfdbfe; }
-        .divider { width: 1px; background: var(--border-color); }
+        
+        .device-selector {
+            padding: 6px 10px; font-size: 13px; font-weight: 700; color: var(--brand-primary);
+            background: var(--brand-light); border: 1px solid #bfdbfe; border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace; cursor: pointer; outline: none;
+        }
+        .device-selector:focus { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }
+        
+        .divider { width: 1px; background: var(--border-color); align-self: stretch; }
 
         /* --- DASHBOARD GRID LAYOUT --- */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: 260px 1fr; /* Slimmer Left col for AQI */
-            gap: 16px; /* Tighter gap */
+            grid-template-columns: 260px 1fr;
+            gap: 16px;
+            transition: all 0.3s ease;
         }
+        
+        /* Modifiers for Devices without AQI */
+        .dashboard-grid.no-aqi {
+            grid-template-columns: 1fr;
+        }
+        .dashboard-grid.no-aqi .water-panel { grid-column: 1 / -1; }
 
         /* AQI PANEL (LEFT) */
         .aqi-panel {
@@ -154,33 +170,29 @@
         .gauge-value { 
             fill: none; stroke: var(--status-success); stroke-width: 10; 
             stroke-linecap: round; transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s; 
-            stroke-dasharray: 126; /* Arc length for r=40 */
+            stroke-dasharray: 126; 
             stroke-dashoffset: 126; 
         }
 
-        .aqi-readout {
-            position: absolute; bottom: -8px; left: 0; width: 100%; text-align: center;
-        }
+        .aqi-readout { position: absolute; bottom: -8px; left: 0; width: 100%; text-align: center; }
         .aqi-number { font-size: 46px; font-weight: 800; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; line-height: 1; letter-spacing: -1.5px; }
         .aqi-text { font-size: 14px; font-weight: 700; text-transform: uppercase; margin-top: 2px; letter-spacing: 0.5px; }
 
-        /* WATER PANEL (RIGHT) */
+        /* WATER & AIR PANELS */
         .water-panel { grid-column: 2; display: flex; flex-direction: column; }
-        
-        /* AIR PANEL (BOTTOM) */
         .air-panel { grid-column: 1 / -1; margin-top: 4px; }
 
         .section-title {
             font-size: 15px; font-weight: 800; color: var(--text-primary);
             margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
         }
-        .section-title span { background: var(--bg-surface); padding: 4px; border-radius: 6px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); display: flex; font-size: 14px;}
+        .section-title span.icon { background: var(--bg-surface); padding: 4px; border-radius: 6px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); display: flex; font-size: 14px;}
 
         /* SENSOR GRIDS */
-        .water-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; height: 100%; }
+        .water-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; height: 100%; align-content: start; }
         .air-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 
-        /* SENSOR CARDS (COMPACTED) */
+        /* SENSOR CARDS */
         .card {
             background: var(--bg-surface); border: 1px solid var(--border-color);
             border-radius: var(--radius-md); padding: 14px; box-shadow: var(--shadow-sm);
@@ -208,7 +220,18 @@
         .card-value { font-size: 22px; font-weight: 800; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; line-height: 1; }
         .card-unit { font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
 
-        /* Empty State Loader */
+        /* CHART PANEL */
+        .chart-panel {
+            grid-column: 1 / -1; background: var(--bg-surface); border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); margin-top: 8px;
+        }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .metric-selector {
+            padding: 4px 8px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 6px;
+            background: #f8fafc; color: var(--text-primary); font-weight: 600; outline: none;
+        }
+
+        /* Empty State */
         .empty-state {
             text-align: center; padding: 60px 20px; background: var(--bg-surface); border-radius: var(--radius-lg);
             border: 2px dashed var(--border-color); color: var(--text-secondary);
@@ -222,13 +245,13 @@
 
         /* Responsive */
         @media (max-width: 1024px) {
-            .dashboard-grid { grid-template-columns: 1fr; }
-            .aqi-panel, .water-panel, .air-panel { grid-column: 1; }
+            .dashboard-grid { grid-template-columns: 1fr !important; }
+            .aqi-panel, .water-panel, .air-panel { grid-column: 1 !important; }
             .water-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
             .aqi-gauge-container { max-width: 240px; height: 120px; }
         }
         @media (max-width: 768px) {
-            .meta-banner { flex-direction: column; gap: 12px; padding: 16px; }
+            .meta-banner { flex-direction: column; gap: 12px; padding: 16px; align-items: stretch; }
             .divider { display: none; }
             .top-nav { flex-direction: column; gap: 12px; align-items: flex-start; }
             .nav-actions { width: 100%; justify-content: space-between; }
@@ -240,8 +263,8 @@
 <div id="loginOverlay">
     <div class="login-box">
         <div class="login-logo">⚡</div>
-        <h2>Carbelim Lab Monitoring</h2>
-        <p>Enterprise Telemetry Portal</p>
+        <h2>Enterprise Lab Monitoring</h2>
+        <p>Telemetry Control Portal</p>
         <div class="input-group"><label>Username</label><input type="text" id="loginUser" autocomplete="off"></div>
         <div class="input-group"><label>Password</label><input type="password" id="loginPass" autocomplete="off"></div>
         <button onclick="attemptLogin()">Secure Login</button>
@@ -252,7 +275,7 @@
 <div class="wrapper" id="mainDashboard">
     
     <header class="top-nav">
-        <div class="brand"><div class="brand-icon">⚡</div><h1>Carbelim Lab Monitoring</h1></div>
+        <div class="brand"><div class="brand-icon">⚡</div><h1 id="appTitle">Carbelim Lab Monitoring</h1></div>
         <div class="nav-actions">
             <div id="statusPill" class="status-pill disconnected"><div class="status-indicator"></div><span id="statusText">Offline</span></div>
             <button class="logout-btn" onclick="logout()">Sign Out</button>
@@ -260,7 +283,13 @@
     </header>
 
     <div class="meta-banner">
-        <div class="meta-group"><span class="meta-label">Target Device</span><span class="meta-value meta-device" id="meta-device">BTTE1250007</span></div>
+        <div class="meta-group">
+            <span class="meta-label">Target Device Array</span>
+            <select id="deviceSelector" class="device-selector" onchange="handleDeviceSwitch(this.value)">
+                <option value="BTTE1250007">Carbelim Lab (BTTE1250007)</option>
+                <option value="BTTE1260001">Amene Lab (BTTE1260001)</option>
+            </select>
+        </div>
         <div class="divider"></div>
         <div class="meta-group"><span class="meta-label">Last Packet Date</span><span class="meta-value" id="meta-date">Awaiting Signal...</span></div>
         <div class="divider"></div>
@@ -270,7 +299,7 @@
     <div id="loadingState" class="empty-state">
         <div class="spinner"></div>
         <h3 style="color: var(--text-primary); margin-bottom: 6px; font-size: 16px; font-weight: 800;">Establishing Secure Connection</h3>
-        <p style="font-size: 13px;">Waiting for the first telemetry packet from device BTTE1250007.</p>
+        <p style="font-size: 13px;" id="loadingText">Waiting for telemetry packet...</p>
     </div>
 
     <div id="dataContainers" class="dashboard-grid" style="display: none;">
@@ -290,13 +319,24 @@
         </div>
 
         <div class="water-panel">
-            <div class="section-title"><span>💧</span> Water Quality Analysis</div>
+            <div class="section-title"><span class="icon" id="panel1Icon">💧</span> <span id="panel1Title">Water Quality Analysis</span></div>
             <div class="water-grid" id="waterGrid"></div>
         </div>
 
-        <div class="air-panel">
-            <div class="section-title"><span>🌬️</span> Environment & Gases</div>
+        <div class="air-panel" id="airPanelContainer">
+            <div class="section-title"><span class="icon" id="panel2Icon">🌬️</span> <span id="panel2Title">Environment & Gases</span></div>
             <div class="air-grid" id="airGrid"></div>
+        </div>
+        
+        <div class="chart-panel">
+            <div class="chart-header">
+                <div class="section-title" style="margin:0;"><span class="icon">📈</span> Historical Data (Last 10 Mins)</div>
+                <select id="chartMetricSelect" class="metric-selector" onchange="renderChart()">
+                    </select>
+            </div>
+            <div style="position: relative; height: 250px; width: 100%;">
+                <canvas id="historyChart"></canvas>
+            </div>
         </div>
 
     </div>
@@ -304,34 +344,86 @@
 
 <script>
     const WS_URL = 'wss://ztw46d04q3.execute-api.us-east-1.amazonaws.com/production';
-    const TARGET_DEVICE = 'BTTE1250007';
     const SESSION_KEY = 'carbelim_enterprise_session';
-
-    const WATER_KEYS = ['d1', 'd2', 'd3'];
-    const AIR_KEYS = ['d4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10', 'd11', 'd12', 'd13', 'd14'];
-
-    const SENSOR_MAP = {
-        'd1':  { name: 'Turbidity',   icon: '💧', scale: 10,   unit: 'NTU' },
-        'd2':  { name: 'pH Level',    icon: '🧪', scale: 100,  unit: '' },
-        'd3':  { name: 'TDS',         icon: '🧂', scale: 10,   unit: 'ppm' },
-        'd4':  { name: 'PM 1.0',      icon: '🌫️', scale: 1,    unit: 'µg/m³' },
-        'd5':  { name: 'PM 2.5',      icon: '🌬️', scale: 1,    unit: 'µg/m³' },
-        'd6':  { name: 'PM 10',       icon: '💨', scale: 1,    unit: 'µg/m³' },
-        'd7':  { name: 'CO2',         icon: '😮‍💨',scale: 1,    unit: 'ppm' },
-        'd8':  { name: 'VOC Grade',   icon: '🏭', scale: 1,    unit: 'Grade' },
-        'd9':  { name: 'Temperature', icon: '🌡️', scale: 10,   unit: '°C' },
-        'd10': { name: 'Humidity',    icon: '🌧️', scale: 10,   unit: '%RH' },
-        'd11': { name: 'CH2O',        icon: '🔬', scale: 1000, unit: 'mg/m³' },
-        'd12': { name: 'CO',          icon: '🚗', scale: 10,   unit: 'ppm' },
-        'd13': { name: 'O3',          icon: '⚡', scale: 100,  unit: 'ppm' },
-        'd14': { name: 'NO2',         icon: '🌆', scale: 100,  unit: 'ppm' }
+    
+    // --- Device Profiles & Configs ---
+    const DEVICE_CONFIGS = {
+        'BTTE1250007': {
+            name: 'Carbelim Lab Monitoring',
+            hasAQI: true,
+            panel1Title: 'Water Quality Analysis',
+            panel1Icon: '💧',
+            panel1Keys: ['d1', 'd2', 'd3'],
+            panel2Title: 'Environment & Gases',
+            panel2Icon: '🌬️',
+            panel2Keys: ['d4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10', 'd11', 'd12', 'd13', 'd14'],
+            sensors: {
+                'd1':  { name: 'Turbidity',   icon: '💧', scale: 10,   unit: 'NTU' },
+                'd2':  { name: 'pH Level',    icon: '🧪', scale: 100,  unit: '' },
+                'd3':  { name: 'TDS',         icon: '🧂', scale: 10,   unit: 'ppm' },
+                'd4':  { name: 'PM 1.0',      icon: '🌫️', scale: 1,    unit: 'µg/m³' },
+                'd5':  { name: 'PM 2.5',      icon: '🌬️', scale: 1,    unit: 'µg/m³' },
+                'd6':  { name: 'PM 10',       icon: '💨', scale: 1,    unit: 'µg/m³' },
+                'd7':  { name: 'CO2',         icon: '😮‍💨',scale: 1,    unit: 'ppm' },
+                'd8':  { name: 'VOC Grade',   icon: '🏭', scale: 1,    unit: 'Grade' },
+                'd9':  { name: 'Temperature', icon: '🌡️', scale: 10,   unit: '°C' },
+                'd10': { name: 'Humidity',    icon: '🌧️', scale: 10,   unit: '%RH' },
+                'd11': { name: 'CH2O',        icon: '🔬', scale: 1000, unit: 'mg/m³' },
+                'd12': { name: 'CO',          icon: '🚗', scale: 10,   unit: 'ppm' },
+                'd13': { name: 'O3',          icon: '⚡', scale: 100,  unit: 'ppm' },
+                'd14': { name: 'NO2',         icon: '🌆', scale: 100,  unit: 'ppm' }
+            },
+            chartMetrics: [
+                { value: 'aqi', label: 'Air Quality Index (AQI)' },
+                { value: 'd1', label: 'Turbidity' },
+                { value: 'd2', label: 'pH Level' },
+                { value: 'd5', label: 'PM 2.5' }
+            ]
+        },
+        'BTTE1260001': {
+            name: 'Amene Lab Monitoring',
+            hasAQI: false,
+            panel1Title: 'Reactor Liquid Metrics',
+            panel1Icon: '🧪',
+            panel1Keys: ['d3', 'd4', 'd5'],
+            panel2Title: 'Reactor Gas Exchange',
+            panel2Icon: '💨',
+            panel2Keys: ['d1', 'd2'],
+            sensors: {
+                'd1': { name: 'Outlet CO2', icon: '😮‍💨', scale: 1,   unit: 'ppm' },
+                'd2': { name: 'Inlet CO2',  icon: '🌬️', scale: 1,   unit: 'ppm' },
+                'd3': { name: 'Water Temp', icon: '🌡️', scale: 100, unit: '°C' },
+                'd4': { name: 'Flow Rate',  icon: '🌊', scale: 10,  unit: 'L/min' },
+                'd5': { name: 'pH Value',   icon: '🧪', scale: 100, unit: '' }
+            },
+            chartMetrics: [
+                { value: 'd1', label: 'Outlet CO2' },
+                { value: 'd2', label: 'Inlet CO2' },
+                { value: 'd3', label: 'Water Temp' },
+                { value: 'd4', label: 'Flow Rate' },
+                { value: 'd5', label: 'pH Value' }
+            ]
+        }
     };
 
+    let ACTIVE_DEVICE = 'BTTE1250007';
     let ws = null;
     let reconnectInterval = null;
+    
+    // --- Historical Data Store ---
+    const MAX_HISTORY_POINTS = 600; 
+    let telemetryHistory = {
+        'BTTE1250007': [],
+        'BTTE1260001': []
+    };
+    let chartInstance = null;
 
     // --- Authentication ---
-    window.onload = function() { checkSession(); };
+    window.onload = function() { 
+        checkSession(); 
+        initChart(); 
+        populateChartDropdown();
+    };
     function checkSession() {
         const sessionData = localStorage.getItem(SESSION_KEY);
         if (sessionData && JSON.parse(sessionData).expiry > Date.now()) { showDashboard(); return; }
@@ -354,10 +446,65 @@
         document.getElementById('loginPass').value = '';
     }
 
+    // --- Device Switching ---
+    function handleDeviceSwitch(newDevice) {
+        ACTIVE_DEVICE = newDevice;
+        let config = DEVICE_CONFIGS[ACTIVE_DEVICE];
+        
+        document.getElementById('appTitle').textContent = config.name;
+        
+        // Update Panel Headers
+        document.getElementById('panel1Title').textContent = config.panel1Title;
+        document.getElementById('panel1Icon').textContent = config.panel1Icon;
+        document.getElementById('panel2Title').textContent = config.panel2Title;
+        document.getElementById('panel2Icon').textContent = config.panel2Icon;
+
+        // Manage AQI Panel visibility and Grid styling
+        let container = document.getElementById('dataContainers');
+        if(config.hasAQI) {
+            document.getElementById('aqiPanel').style.display = 'flex';
+            container.classList.remove('no-aqi');
+        } else {
+            document.getElementById('aqiPanel').style.display = 'none';
+            container.classList.add('no-aqi');
+        }
+
+        // Reset Grids
+        document.getElementById('waterGrid').innerHTML = '';
+        document.getElementById('airGrid').innerHTML = '';
+        
+        // Update Chart Dropdown
+        populateChartDropdown();
+
+        // Show loading state while waiting for new socket data
+        container.style.display = 'none';
+        document.getElementById('loadingState').style.display = 'block';
+        document.getElementById('loadingText').textContent = `Waiting for first telemetry packet from ${ACTIVE_DEVICE}...`;
+
+        // Send subscription change to active websocket
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: 'subscribe', deviceId: ACTIVE_DEVICE }));
+        }
+        
+        renderChart(); 
+    }
+
+    function populateChartDropdown() {
+        let select = document.getElementById('chartMetricSelect');
+        select.innerHTML = '';
+        DEVICE_CONFIGS[ACTIVE_DEVICE].chartMetrics.forEach(m => {
+            let opt = document.createElement('option');
+            opt.value = m.value;
+            opt.textContent = m.label;
+            select.appendChild(opt);
+        });
+    }
+
     // --- WebSocket ---
     function showDashboard() {
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('mainDashboard').style.display = 'block';
+        document.getElementById('appTitle').textContent = DEVICE_CONFIGS[ACTIVE_DEVICE].name;
         connectWebSocket();
     }
     function connectWebSocket() {
@@ -365,7 +512,7 @@
         ws = new WebSocket(WS_URL);
         ws.onopen = () => { 
             updateStatus('Live', 'connected'); 
-            ws.send(JSON.stringify({ action: 'subscribe', deviceId: TARGET_DEVICE }));
+            ws.send(JSON.stringify({ action: 'subscribe', deviceId: ACTIVE_DEVICE }));
             if(reconnectInterval) clearInterval(reconnectInterval);
         };
         ws.onclose = () => { updateStatus('Reconnecting...', 'disconnected'); if(!reconnectInterval) reconnectInterval = setInterval(connectWebSocket, 5000); };
@@ -374,7 +521,11 @@
             try {
                 let parsed = JSON.parse(e.data);
                 let data = parsed.type === 'deviceData' ? parsed.data : (parsed.data || parsed);
-                if (data && typeof data === 'object') renderData(data);
+                
+                let incomingDevice = data.d || ACTIVE_DEVICE;
+                if (data && typeof data === 'object' && incomingDevice === ACTIVE_DEVICE) {
+                    processIncomingData(data);
+                }
             } catch(err) {}
         };
     }
@@ -410,8 +561,82 @@
         return { text: 'Hazardous', color: '#9f1239', bg: '#fff1f2', border: '#fecdd3' }; 
     }
 
-    // --- Rendering ---
-    function renderData(data) {
+    // --- Data Processing & Charting ---
+    function processIncomingData(data) {
+        let config = DEVICE_CONFIGS[ACTIVE_DEVICE];
+        let aqi = null;
+        
+        // Only run AQI engine if the active device supports it
+        if(config.hasAQI) {
+            let pm25Scale = config.sensors['d5'] ? config.sensors['d5'].scale : 1;
+            let pm10Scale = config.sensors['d6'] ? config.sensors['d6'].scale : 1;
+            let pm25 = data['d5'] ? Number(data['d5']) / pm25Scale : 0;
+            let pm10 = data['d6'] ? Number(data['d6']) / pm10Scale : 0;
+            aqi = calculateAQI(pm25, pm10);
+        }
+
+        let timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
+        telemetryHistory[ACTIVE_DEVICE].push({ time: timestamp, raw: data, aqi: aqi });
+        
+        if(telemetryHistory[ACTIVE_DEVICE].length > MAX_HISTORY_POINTS) {
+            telemetryHistory[ACTIVE_DEVICE].shift();
+        }
+
+        renderCards(data, aqi, config);
+        renderChart();
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Metric', data: [], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4 }] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 10, font: {family: "'JetBrains Mono', monospace", size: 10} } },
+                    y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { font: {family: "'JetBrains Mono', monospace", size: 11} } }
+                }
+            }
+        });
+    }
+
+    function renderChart() {
+        if(!chartInstance) return;
+        let selectedMetric = document.getElementById('chartMetricSelect').value;
+        let activeData = telemetryHistory[ACTIVE_DEVICE];
+        let config = DEVICE_CONFIGS[ACTIVE_DEVICE];
+        
+        let labels = activeData.map(d => d.time);
+        let plotData = activeData.map(d => {
+            if (selectedMetric === 'aqi') return d.aqi;
+            let val = Number(d.raw[selectedMetric]);
+            let scale = config.sensors[selectedMetric] ? config.sensors[selectedMetric].scale : 1;
+            return isNaN(val) ? 0 : parseFloat((val / scale).toFixed(3));
+        });
+
+        chartInstance.data.labels = labels;
+        chartInstance.data.datasets[0].data = plotData;
+        
+        // Chart color changes dynamically for AQI, otherwise defaults to brand blue
+        if(selectedMetric === 'aqi' && plotData.length > 0) {
+            let latestAqi = plotData[plotData.length - 1];
+            let meta = getAQIMeta(latestAqi);
+            chartInstance.data.datasets[0].borderColor = meta.color;
+            chartInstance.data.datasets[0].backgroundColor = meta.color + '22';
+        } else {
+            chartInstance.data.datasets[0].borderColor = '#2563eb';
+            chartInstance.data.datasets[0].backgroundColor = 'rgba(37, 99, 235, 0.1)';
+        }
+
+        chartInstance.update();
+    }
+
+    // --- Core UI Rendering ---
+    function renderCards(data, aqi, config) {
         if(data.date) {
             let parts = data.date.includes(',') ? data.date.split(',') : [data.date, '--:--:--'];
             document.getElementById('meta-date').textContent = parts[0];
@@ -419,36 +644,32 @@
         }
 
         document.getElementById('loadingState').style.display = 'none';
-        
-        // Use flex/grid display to reveal the layout
         document.getElementById('dataContainers').style.display = 'grid';
 
-        // AQI Logic
-        let pm25 = data['d5'] ? Number(data['d5']) / SENSOR_MAP['d5'].scale : 0;
-        let pm10 = data['d6'] ? Number(data['d6']) / SENSOR_MAP['d6'].scale : 0;
-        let aqi = calculateAQI(pm25, pm10);
-        
-        let meta = getAQIMeta(aqi);
-        document.getElementById('aqiValueDisplay').textContent = aqi;
-        document.getElementById('aqiValueDisplay').style.color = meta.color;
-        document.getElementById('aqiTextDisplay').textContent = meta.text;
-        document.getElementById('aqiTextDisplay').style.color = meta.color;
-        
-        let panel = document.getElementById('aqiPanel');
-        panel.style.background = `linear-gradient(180deg, ${meta.bg} 0%, #ffffff 100%)`;
-        panel.style.borderColor = meta.border;
+        // Conditional AQI Rendering
+        if(config.hasAQI && aqi !== null) {
+            let meta = getAQIMeta(aqi);
+            document.getElementById('aqiValueDisplay').textContent = aqi;
+            document.getElementById('aqiValueDisplay').style.color = meta.color;
+            document.getElementById('aqiTextDisplay').textContent = meta.text;
+            document.getElementById('aqiTextDisplay').style.color = meta.color;
+            
+            let panel = document.getElementById('aqiPanel');
+            panel.style.background = `linear-gradient(180deg, ${meta.bg} 0%, #ffffff 100%)`;
+            panel.style.borderColor = meta.border;
 
-        let arcOffset = 126 - (Math.min(aqi / 500, 1) * 126);
-        let arcElement = document.getElementById('aqiArc');
-        arcElement.style.strokeDashoffset = arcOffset;
-        arcElement.style.stroke = meta.color;
+            let arcOffset = 126 - (Math.min(aqi / 500, 1) * 126);
+            let arcElement = document.getElementById('aqiArc');
+            arcElement.style.strokeDashoffset = arcOffset;
+            arcElement.style.stroke = meta.color;
+        }
 
-        // Render Cards into Grids
-        Object.keys(SENSOR_MAP).forEach(key => {
+        // Render Sensor Cards dynamically via Active Config
+        Object.keys(config.sensors).forEach(key => {
             if (data[key] !== undefined && data[key] !== null) {
-                const config = SENSOR_MAP[key];
+                const sensorConf = config.sensors[key];
                 const rawValue = Number(data[key]);
-                let finalValue = isNaN(rawValue) ? "Err" : parseFloat((rawValue / config.scale).toFixed(3));
+                let finalValue = isNaN(rawValue) ? "Err" : parseFloat((rawValue / sensorConf.scale).toFixed(3));
 
                 let cardId = `card-${key}`;
                 let card = document.getElementById(cardId);
@@ -460,20 +681,24 @@
                     card.innerHTML = `
                         <div class="card-live-dot" title="Sensor Active"></div>
                         <div class="card-header">
-                            <div class="icon-box">${config.icon}</div>
+                            <div class="icon-box">${sensorConf.icon}</div>
                             <div class="card-title-group">
-                                <span class="card-title">${config.name}</span>
+                                <span class="card-title">${sensorConf.name}</span>
                                 <span class="card-key">Key: ${key}</span>
                             </div>
                         </div>
                         <div class="card-value-wrap">
                             <span class="card-value">${finalValue}</span>
-                            <span class="card-unit">${config.unit}</span>
+                            <span class="card-unit">${sensorConf.unit}</span>
                         </div>
                     `;
                     
-                    if(WATER_KEYS.includes(key)) document.getElementById('waterGrid').appendChild(card);
-                    else if(AIR_KEYS.includes(key)) document.getElementById('airGrid').appendChild(card);
+                    // Route to Panel 1 (Water/Liquid) or Panel 2 (Air/Gas)
+                    if(config.panel1Keys.includes(key)) {
+                        document.getElementById('waterGrid').appendChild(card);
+                    } else if(config.panel2Keys.includes(key)) {
+                        document.getElementById('airGrid').appendChild(card);
+                    }
                 } else {
                     card.querySelector('.card-value').textContent = finalValue;
                 }
