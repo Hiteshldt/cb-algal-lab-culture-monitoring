@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enterprise Lab Monitoring</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap');
 
         :root {
             --bg-body: #f8fafc;
             --bg-surface: #ffffff;
+            --bg-muted: #f1f5f9;
             --text-primary: #0f172a;
             --text-secondary: #475569;
             --text-tertiary: #94a3b8;
@@ -18,16 +20,19 @@
             --brand-light: #eff6ff;
             --brand-gradient: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
             --border-color: #e2e8f0;
-            
+
             --status-success: #10b981;
             --status-success-bg: #d1fae5;
+            --status-warn: #f59e0b;
+            --status-warn-bg: #fef3c7;
             --status-error: #ef4444;
             --status-error-bg: #fee2e2;
-            
+
             --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
             --shadow-hover: 0 12px 25px -5px rgba(37, 99, 235, 0.15), 0 8px 10px -6px rgba(37, 99, 235, 0.1);
-            
+
+            --radius-sm: 6px;
             --radius-md: 10px;
             --radius-lg: 14px;
             --radius-xl: 18px;
@@ -55,7 +60,7 @@
         }
         .login-logo {
             width: 48px; height: 48px; background: var(--brand-gradient);
-            border-radius: 12px; margin: 0 auto 16px; display: flex; align-items: center; 
+            border-radius: 12px; margin: 0 auto 16px; display: flex; align-items: center;
             justify-content: center; color: white; font-size: 24px; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
         }
         .login-box h2 { font-size: 20px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.5px; }
@@ -94,14 +99,14 @@
             font-size: 14px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
         }
         .brand h1 { font-size: 16px; font-weight: 800; letter-spacing: -0.5px; }
-        
+
         .nav-actions { display: flex; align-items: center; gap: 12px; }
         .logout-btn {
             background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color);
             padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;
             cursor: pointer; transition: all 0.2s; font-family: inherit;
         }
-        .logout-btn:hover { background: #f1f5f9; color: var(--text-primary); }
+        .logout-btn:hover { background: var(--bg-muted); color: var(--text-primary); }
 
         .status-pill {
             display: flex; align-items: center; gap: 6px; padding: 6px 12px;
@@ -112,25 +117,34 @@
         .connected .status-indicator { background: var(--status-success); animation: pulse 2s infinite; }
         .disconnected { background: var(--status-error-bg); color: #b91c1c; }
         .disconnected .status-indicator { background: var(--status-error); }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+        .reconnecting { background: var(--status-warn-bg); color: #92400e; }
+        .reconnecting .status-indicator { background: var(--status-warn); animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
 
-        /* Meta Banner & Controls */
+        /* Meta Banner */
         .meta-banner {
             display: flex; gap: 24px; background: var(--bg-surface); padding: 16px 20px;
             border-radius: var(--radius-lg); border: 1px solid var(--border-color); margin-bottom: 20px; box-shadow: var(--shadow-sm);
-            align-items: center;
+            align-items: center; flex-wrap: wrap;
         }
         .meta-group { display: flex; flex-direction: column; gap: 2px; }
-        .meta-label { font-size: 10px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; }
+        .meta-label { font-size: 10px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
         .meta-value { font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-        
+        .meta-value.fresh { color: var(--status-success); }
+        .meta-value.stale { color: var(--status-warn); }
+        .meta-value.dead { color: var(--status-error); }
+
         .device-selector {
             padding: 6px 10px; font-size: 13px; font-weight: 700; color: var(--brand-primary);
             background: var(--brand-light); border: 1px solid #bfdbfe; border-radius: 6px;
             font-family: 'JetBrains Mono', monospace; cursor: pointer; outline: none;
         }
         .device-selector:focus { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); }
-        
+
         .divider { width: 1px; background: var(--border-color); align-self: stretch; }
 
         /* --- DASHBOARD GRID LAYOUT --- */
@@ -140,14 +154,10 @@
             gap: 16px;
             transition: all 0.3s ease;
         }
-        
-        /* Modifiers for Devices without AQI */
-        .dashboard-grid.no-aqi {
-            grid-template-columns: 1fr;
-        }
+        .dashboard-grid.no-aqi { grid-template-columns: 1fr; }
         .dashboard-grid.no-aqi .water-panel { grid-column: 1 / -1; }
 
-        /* AQI PANEL (LEFT) */
+        /* AQI PANEL */
         .aqi-panel {
             grid-column: 1;
             background: var(--bg-surface); border: 1px solid var(--border-color);
@@ -155,25 +165,21 @@
             text-align: center; display: flex; flex-direction: column; justify-content: center;
             transition: background 0.5s ease, border-color 0.5s ease;
         }
-
         .aqi-title {
             font-size: 13px; font-weight: 800; color: var(--text-secondary);
             text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;
         }
-
         .aqi-gauge-container {
             position: relative; width: 100%; max-width: 200px; height: 100px; margin: 0 auto 8px;
         }
-        
         .aqi-gauge { width: 100%; height: 100%; overflow: visible; }
-        .gauge-bg { fill: none; stroke: #e2e8f0; stroke-width: 10; stroke-linecap: round; }
-        .gauge-value { 
-            fill: none; stroke: var(--status-success); stroke-width: 10; 
-            stroke-linecap: round; transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s; 
-            stroke-dasharray: 126; 
-            stroke-dashoffset: 126; 
+        .gauge-bg { fill: none; stroke: var(--border-color); stroke-width: 10; stroke-linecap: round; }
+        .gauge-value {
+            fill: none; stroke: var(--status-success); stroke-width: 10;
+            stroke-linecap: round; transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.5s;
+            stroke-dasharray: 126;
+            stroke-dashoffset: 126;
         }
-
         .aqi-readout { position: absolute; bottom: -8px; left: 0; width: 100%; text-align: center; }
         .aqi-number { font-size: 46px; font-weight: 800; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; line-height: 1; letter-spacing: -1.5px; }
         .aqi-text { font-size: 14px; font-weight: 700; text-transform: uppercase; margin-top: 2px; letter-spacing: 0.5px; }
@@ -198,15 +204,23 @@
             border-radius: var(--radius-md); padding: 14px; box-shadow: var(--shadow-sm);
             transition: all 0.2s ease-in-out; display: flex;
             flex-direction: column; justify-content: space-between; position: relative;
+            cursor: pointer;
         }
         .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); border-color: #93c5fd; }
-        
+        .card.is-charting { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15); }
+        .card.is-flashing .card-value { animation: flash 0.6s ease-out; }
+        @keyframes flash {
+            0% { color: var(--brand-primary); }
+            100% { color: var(--text-primary); }
+        }
+
         .card-live-dot {
             position: absolute; top: 10px; right: 10px; width: 6px; height: 6px;
             border-radius: 50%; background: var(--status-success);
             box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); animation: pulse 2.5s infinite;
         }
-        
+        .card-live-dot.stale { background: var(--status-warn); box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
+
         .card-header { display: flex; align-items: flex-start; gap: 10px; }
         .icon-box {
             width: 32px; height: 32px; background: var(--brand-light); border-radius: 6px;
@@ -215,9 +229,8 @@
         .card-title-group { display: flex; flex-direction: column; gap: 1px; margin-top: 1px; }
         .card-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); line-height: 1.1;}
         .card-key { font-size: 10px; font-weight: 600; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
-        
         .card-value-wrap { margin-top: 12px; display: flex; align-items: baseline; gap: 4px; }
-        .card-value { font-size: 22px; font-weight: 800; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; line-height: 1; }
+        .card-value { font-size: 22px; font-weight: 800; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px; line-height: 1; transition: color 0.6s; }
         .card-unit { font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
 
         /* CHART PANEL */
@@ -225,12 +238,60 @@
             grid-column: 1 / -1; background: var(--bg-surface); border: 1px solid var(--border-color);
             border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); margin-top: 8px;
         }
-        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .metric-selector {
-            padding: 6px 12px; font-size: 13px; border: 1px solid var(--border-color); border-radius: 8px;
-            background: #f8fafc; color: var(--text-primary); font-weight: 600; outline: none; cursor: pointer;
+        .chart-toolbar {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
         }
+        .chart-toolbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .chart-toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+        .metric-selector {
+            padding: 7px 12px; font-size: 13px; border: 1px solid var(--border-color); border-radius: 8px;
+            background: var(--bg-surface); color: var(--text-primary); font-weight: 600; outline: none; cursor: pointer;
+            font-family: inherit; min-width: 200px;
+        }
+        .metric-selector:hover { border-color: var(--brand-primary); }
+        .metric-selector:focus { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); border-color: var(--brand-primary); }
+
+        .icon-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 7px 10px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 8px;
+            background: var(--bg-surface); color: var(--text-secondary); font-weight: 700; cursor: pointer;
+            font-family: inherit; transition: all 0.15s;
+        }
+        .icon-btn:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
+        .icon-btn.is-active { color: var(--brand-primary); background: var(--brand-light); border-color: #bfdbfe; }
+        .icon-btn svg { width: 12px; height: 12px; }
+
+        /* STATS STRIP */
+        .stats-strip {
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+            margin-bottom: 16px;
+        }
+        .stat-tile {
+            background: var(--bg-muted); border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm); padding: 10px 12px;
+        }
+        .stat-label {
+            font-size: 10px; font-weight: 700; color: var(--text-tertiary);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .stat-value {
+            font-size: 18px; font-weight: 800; color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace; letter-spacing: -0.5px;
+            line-height: 1.2; margin-top: 2px;
+        }
+        .stat-value .unit { font-size: 11px; font-weight: 600; color: var(--text-tertiary); margin-left: 3px; }
+        .stat-value.delta-up { color: var(--status-success); }
+        .stat-value.delta-down { color: var(--status-error); }
+
+        .chart-container { position: relative; height: 280px; width: 100%; }
         #historyChart { transition: opacity 0.3s; }
+
+        .chart-notice {
+            font-size: 11px; color: var(--text-tertiary); margin-top: 10px;
+            font-family: 'JetBrains Mono', monospace; text-align: right;
+        }
 
         /* Empty State */
         .empty-state {
@@ -244,18 +305,33 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 20px; right: 20px; z-index: 10000;
+            background: var(--text-primary); color: white; padding: 10px 16px;
+            border-radius: 8px; font-size: 13px; font-weight: 600;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+            transform: translateY(60px); opacity: 0; transition: all 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .dashboard-grid { grid-template-columns: 1fr !important; }
             .aqi-panel, .water-panel, .air-panel { grid-column: 1 !important; }
             .water-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
             .aqi-gauge-container { max-width: 240px; height: 120px; }
+            .stats-strip { grid-template-columns: repeat(3, 1fr); }
         }
         @media (max-width: 768px) {
             .meta-banner { flex-direction: column; gap: 12px; padding: 16px; align-items: stretch; }
             .divider { display: none; }
             .top-nav { flex-direction: column; gap: 12px; align-items: flex-start; }
             .nav-actions { width: 100%; justify-content: space-between; }
+            .stats-strip { grid-template-columns: repeat(2, 1fr); }
+            .metric-selector { min-width: 0; flex: 1; }
+            .chart-toolbar-left, .chart-toolbar-right { width: 100%; }
         }
     </style>
 </head>
@@ -274,7 +350,7 @@
 </div>
 
 <div class="wrapper" id="mainDashboard">
-    
+
     <header class="top-nav">
         <div class="brand"><div class="brand-icon">⚡</div><h1 id="appTitle">Carbelim Lab Monitoring</h1></div>
         <div class="nav-actions">
@@ -295,6 +371,10 @@
         <div class="meta-group"><span class="meta-label">Last Packet Date</span><span class="meta-value" id="meta-date">Awaiting Signal...</span></div>
         <div class="divider"></div>
         <div class="meta-group"><span class="meta-label">Last Packet Time</span><span class="meta-value" id="meta-time">--:--:--</span></div>
+        <div class="divider"></div>
+        <div class="meta-group"><span class="meta-label">Packet Age</span><span class="meta-value" id="meta-age">—</span></div>
+        <div class="divider"></div>
+        <div class="meta-group"><span class="meta-label">Packets Received</span><span class="meta-value" id="meta-count">0</span></div>
     </div>
 
     <div id="loadingState" class="empty-state">
@@ -304,7 +384,7 @@
     </div>
 
     <div id="dataContainers" class="dashboard-grid" style="display: none;">
-        
+
         <div class="aqi-panel" id="aqiPanel">
             <div class="aqi-title">Air Quality Index</div>
             <div class="aqi-gauge-container">
@@ -328,425 +408,928 @@
             <div class="section-title"><span class="icon" id="panel2Icon">🌬️</span> <span id="panel2Title">Environment & Gases</span></div>
             <div class="air-grid" id="airGrid"></div>
         </div>
-        
+
         <div class="chart-panel">
-            <div class="chart-header">
-                <div class="section-title" style="margin:0;"><span class="icon">📈</span> Historical Data (Last 1 Hour)</div>
-                <select id="chartMetricSelect" class="metric-selector" onchange="renderChart()">
-                    </select>
+            <div class="chart-toolbar">
+                <div class="chart-toolbar-left">
+                    <div class="section-title" style="margin:0;"><span class="icon">📈</span> Historical Series</div>
+                    <select id="chartMetricSelect" class="metric-selector" onchange="onMetricChange()"></select>
+                </div>
+                <div class="chart-toolbar-right">
+                    <button class="icon-btn is-active" id="liveBtn" onclick="toggleLive()" title="Pause/Resume live updates (Space)">
+                        <svg viewBox="0 0 12 12" fill="currentColor"><circle cx="6" cy="6" r="3"/></svg>
+                        <span id="liveBtnLabel">Live</span>
+                    </button>
+                    <button class="icon-btn" onclick="exportCSV()" title="Download visible chart data as CSV">
+                        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 1v8m0 0L3 6m3 3l3-3M2 11h8"/></svg>
+                        CSV
+                    </button>
+                </div>
             </div>
-            <div style="position: relative; height: 250px; width: 100%;">
+
+            <div class="stats-strip" id="statsStrip">
+                <div class="stat-tile"><div class="stat-label">Current</div><div class="stat-value" id="statCurrent">—</div></div>
+                <div class="stat-tile"><div class="stat-label">Minimum</div><div class="stat-value" id="statMin">—</div></div>
+                <div class="stat-tile"><div class="stat-label">Maximum</div><div class="stat-value" id="statMax">—</div></div>
+                <div class="stat-tile"><div class="stat-label">Average</div><div class="stat-value" id="statAvg">—</div></div>
+                <div class="stat-tile"><div class="stat-label">Δ vs Start</div><div class="stat-value" id="statDelta">—</div></div>
+            </div>
+
+            <div class="chart-container">
                 <canvas id="historyChart"></canvas>
             </div>
+
+            <div class="chart-notice" id="chartNotice">—</div>
         </div>
 
     </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
-    const WS_URL = 'wss://ztw46d04q3.execute-api.us-east-1.amazonaws.com/production';
-    const SESSION_KEY = 'carbelim_enterprise_session';
-    
-    // --- Device Profiles & Configs ---
-    const DEVICE_CONFIGS = {
-        'BTTE1250007': {
-            name: 'Carbelim Lab Monitoring',
-            hasAQI: true,
-            panel1Title: 'Water Quality Analysis',
-            panel1Icon: '💧',
-            panel1Keys: ['d1', 'd2', 'd3'],
-            panel2Title: 'Environment & Gases',
-            panel2Icon: '🌬️',
-            panel2Keys: ['d4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10', 'd11', 'd12', 'd13', 'd14'],
-            sensors: {
-                'd1':  { name: 'Turbidity',   icon: '💧', scale: 10,   unit: 'NTU' },
-                'd2':  { name: 'pH Level',    icon: '🧪', scale: 100,  unit: '' },
-                'd3':  { name: 'TDS',         icon: '🧂', scale: 10,   unit: 'ppm' },
-                'd4':  { name: 'PM 1.0',      icon: '🌫️', scale: 1,    unit: 'µg/m³' },
-                'd5':  { name: 'PM 2.5',      icon: '🌬️', scale: 1,    unit: 'µg/m³' },
-                'd6':  { name: 'PM 10',       icon: '💨', scale: 1,    unit: 'µg/m³' },
-                'd7':  { name: 'CO2',         icon: '😮‍💨',scale: 1,    unit: 'ppm' },
-                'd8':  { name: 'VOC Grade',   icon: '🏭', scale: 1,    unit: 'Grade' },
-                'd9':  { name: 'Temperature', icon: '🌡️', scale: 10,   unit: '°C' },
-                'd10': { name: 'Humidity',    icon: '🌧️', scale: 10,   unit: '%RH' },
-                'd11': { name: 'CH2O',        icon: '🔬', scale: 1000, unit: 'mg/m³' },
-                'd12': { name: 'CO',          icon: '🚗', scale: 10,   unit: 'ppm' },
-                'd13': { name: 'O3',          icon: '⚡', scale: 100,  unit: 'ppm' },
-                'd14': { name: 'NO2',         icon: '🌆', scale: 100,  unit: 'ppm' }
-            },
-            chartMetrics: [
-                { value: 'aqi', label: 'Air Quality Index (AQI)' },
-                { value: 'd1', label: 'Turbidity' },
-                { value: 'd2', label: 'pH Level' },
-                { value: 'd5', label: 'PM 2.5' },
-                { value: 'd7', label: 'CO2' }
-            ]
+"use strict";
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const WS_URL = 'wss://ztw46d04q3.execute-api.us-east-1.amazonaws.com/production';
+const API_BASE = 'https://vtg0j85nv4.execute-api.us-east-1.amazonaws.com';
+const SESSION_KEY = 'carbelim_enterprise_session';
+const MAX_HISTORY_POINTS = 1000;        // 1H window — generous headroom even at 1s cadence
+const CHART_UPDATE_MIN_INTERVAL = 600;  // ms — coalesce live updates
+const STALE_THRESHOLD_MS = 30000;       // 30s no packet -> orange
+const DEAD_THRESHOLD_MS = 90000;        // 90s no packet -> red
+
+const DEVICE_CONFIGS = {
+    'BTTE1250007': {
+        name: 'Carbelim Lab Monitoring',
+        hasAQI: true,
+        panel1Title: 'Water Quality Analysis',
+        panel1Icon: '💧',
+        panel1Keys: ['d1', 'd2', 'd3'],
+        panel2Title: 'Environment & Gases',
+        panel2Icon: '🌬️',
+        panel2Keys: ['d4', 'd5', 'd6', 'd7', 'd8', 'd9', 'd10', 'd11', 'd12', 'd13', 'd14'],
+        sensors: {
+            'd1':  { name: 'Turbidity',   icon: '💧',  scale: 10,   unit: 'NTU',    group: 'Water' },
+            'd2':  { name: 'pH Level',    icon: '🧪',  scale: 100,  unit: '',       group: 'Water' },
+            'd3':  { name: 'TDS',         icon: '🧂',  scale: 10,   unit: 'ppm',    group: 'Water' },
+            'd4':  { name: 'PM 1.0',      icon: '🌫️', scale: 1,    unit: 'µg/m³',  group: 'Particulate' },
+            'd5':  { name: 'PM 2.5',      icon: '🌬️', scale: 1,    unit: 'µg/m³',  group: 'Particulate' },
+            'd6':  { name: 'PM 10',       icon: '💨',  scale: 1,    unit: 'µg/m³',  group: 'Particulate' },
+            'd7':  { name: 'CO2',         icon: '😮‍💨', scale: 1,    unit: 'ppm',    group: 'Gases' },
+            'd8':  { name: 'VOC Grade',   icon: '🏭',  scale: 1,    unit: 'Grade',  group: 'Gases' },
+            'd9':  { name: 'Temperature', icon: '🌡️', scale: 10,   unit: '°C',     group: 'Climate' },
+            'd10': { name: 'Humidity',    icon: '🌧️', scale: 10,   unit: '%RH',    group: 'Climate' },
+            'd11': { name: 'CH2O',        icon: '🔬',  scale: 1000, unit: 'mg/m³',  group: 'Gases' },
+            'd12': { name: 'CO',          icon: '🚗',  scale: 10,   unit: 'ppm',    group: 'Gases' },
+            'd13': { name: 'O3',          icon: '⚡',  scale: 100,  unit: 'ppm',    group: 'Gases' },
+            'd14': { name: 'NO2',         icon: '🌆',  scale: 100,  unit: 'ppm',    group: 'Gases' }
         },
-        'BTTE1260001': {
-            name: 'Amene Lab Monitoring',
-            hasAQI: false,
-            panel1Title: 'Reactor Liquid Metrics',
-            panel1Icon: '🧪',
-            panel1Keys: ['d3', 'd4', 'd5'],
-            panel2Title: 'Reactor Gas Exchange',
-            panel2Icon: '💨',
-            panel2Keys: ['d1', 'd2'],
-            sensors: {
-                'd1': { name: 'Co2 - 2',    icon: '😮‍💨', scale: 1,   unit: 'ppm' },
-                'd2': { name: 'Co2 - 1',    icon: '🌬️', scale: 1,   unit: 'ppm' },
-                'd3': { name: 'Water Temp', icon: '🌡️', scale: 100, unit: '°C' },
-                'd4': { name: 'Flow Rate',  icon: '🌊', scale: 10,  unit: 'L/min' },
-                'd5': { name: 'pH Value',   icon: '🧪', scale: 100, unit: '' }
-            },
-            chartMetrics: [
-                { value: 'd2', label: 'Co2 - 1' },
-                { value: 'd1', label: 'Co2 - 2' },
-                { value: 'd3', label: 'Water Temp' },
-                { value: 'd4', label: 'Flow Rate' },
-                { value: 'd5', label: 'pH Value' }
-            ]
-        }
-    };
-
-    let ACTIVE_DEVICE = 'BTTE1250007';
-    let ws = null;
-    let reconnectInterval = null;
-    
-    // --- Historical Data Store ---
-    const MAX_HISTORY_POINTS = 1000; 
-    let telemetryHistory = {
-        'BTTE1250007': [],
-        'BTTE1260001': []
-    };
-    let chartInstance = null;
-
-    // --- Authentication ---
-    window.onload = function() { 
-        checkSession(); 
-        initChart(); 
-        populateChartDropdown();
-    };
-    
-    function checkSession() {
-        const sessionData = localStorage.getItem(SESSION_KEY);
-        if (sessionData && JSON.parse(sessionData).expiry > Date.now()) { showDashboard(); return; }
-        document.getElementById('loginOverlay').style.display = 'flex';
+        defaultMetric: 'aqi'
+    },
+    'BTTE1260001': {
+        name: 'Amene Lab Monitoring',
+        hasAQI: false,
+        panel1Title: 'Reactor Liquid Metrics',
+        panel1Icon: '🧪',
+        panel1Keys: ['d3', 'd4', 'd5'],
+        panel2Title: 'Reactor Gas Exchange',
+        panel2Icon: '💨',
+        panel2Keys: ['d1', 'd2'],
+        sensors: {
+            'd1': { name: 'CO2 - 2',    icon: '😮‍💨', scale: 1,   unit: 'ppm',    group: 'Gases' },
+            'd2': { name: 'CO2 - 1',    icon: '🌬️', scale: 1,   unit: 'ppm',    group: 'Gases' },
+            'd3': { name: 'Water Temp', icon: '🌡️', scale: 100, unit: '°C',     group: 'Liquid' },
+            'd4': { name: 'Flow Rate',  icon: '🌊',  scale: 10,  unit: 'L/min',  group: 'Liquid' },
+            'd5': { name: 'pH Value',   icon: '🧪',  scale: 100, unit: '',       group: 'Liquid' }
+        },
+        defaultMetric: 'd2'
     }
-    
-    function attemptLogin() {
-        if (document.getElementById('loginUser').value === 'CarbelimLab' && document.getElementById('loginPass').value === 'CarbelimLab123') {
-            document.getElementById('loginError').style.display = 'none';
-            localStorage.setItem(SESSION_KEY, JSON.stringify({ expiry: Date.now() + (7 * 24 * 60 * 60 * 1000) }));
-            showDashboard();
-        } else { document.getElementById('loginError').style.display = 'block'; }
-    }
-    
+};
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = {
+    activeDevice: 'BTTE1250007',
+    activeMetric: null,
+    livePaused: false,
+    history: { 'BTTE1250007': [], 'BTTE1260001': [] },
+    chart: null,
+    ws: null,
+    reconnectAttempt: 0,
+    reconnectTimer: null,
+    pendingChartUpdate: false,
+    lastChartUpdate: 0,
+    packetCount: 0,
+    lastPacketAt: 0,
+    ageTimer: null
+};
+
+/* ============================================================
+   AUTH (unchanged behavior, kept compatible)
+   ============================================================ */
+window.onload = function() {
+    initChart();
+    checkSession();
     document.getElementById('loginPass').addEventListener('keypress', e => { if (e.key === 'Enter') attemptLogin(); });
-    
-    function logout() {
-        localStorage.removeItem(SESSION_KEY);
-        if (ws) { ws.onclose = null; ws.close(); ws = null; }
-        updateStatus('Offline', 'disconnected');
-        document.getElementById('mainDashboard').style.display = 'none';
-        document.getElementById('loginOverlay').style.display = 'flex';
-        document.getElementById('loginPass').value = '';
+
+    // Spacebar to pause/resume live
+    document.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.code === 'Space' && document.getElementById('mainDashboard').style.display === 'block') {
+            e.preventDefault();
+            toggleLive();
+        }
+    });
+};
+
+function checkSession() {
+    try {
+        const sessionData = localStorage.getItem(SESSION_KEY);
+        if (sessionData && JSON.parse(sessionData).expiry > Date.now()) {
+            showDashboard();
+            return;
+        }
+    } catch (_) { /* corrupt session, fall through */ }
+    document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+function attemptLogin() {
+    const u = document.getElementById('loginUser').value;
+    const p = document.getElementById('loginPass').value;
+    if (u === 'CarbelimLab' && p === 'CarbelimLab123') {
+        document.getElementById('loginError').style.display = 'none';
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ expiry: Date.now() + (7 * 24 * 60 * 60 * 1000) }));
+        showDashboard();
+    } else {
+        document.getElementById('loginError').style.display = 'block';
+    }
+}
+
+function logout() {
+    localStorage.removeItem(SESSION_KEY);
+    if (state.ws) { state.ws.onclose = null; state.ws.close(); state.ws = null; }
+    if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
+    if (state.ageTimer) { clearInterval(state.ageTimer); state.ageTimer = null; }
+    updateStatus('Offline', 'disconnected');
+    document.getElementById('mainDashboard').style.display = 'none';
+    document.getElementById('loginOverlay').style.display = 'flex';
+    document.getElementById('loginPass').value = '';
+}
+
+function showDashboard() {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('mainDashboard').style.display = 'block';
+    handleDeviceSwitch(state.activeDevice, /*initial*/ true);
+    connectWebSocket();
+    if (!state.ageTimer) state.ageTimer = setInterval(updatePacketAge, 1000);
+}
+
+/* ============================================================
+   DEVICE & METRIC SWITCHING
+   ============================================================ */
+function handleDeviceSwitch(newDevice, initial = false) {
+    if (!DEVICE_CONFIGS[newDevice]) return;
+    const previousDevice = state.activeDevice;
+    state.activeDevice = newDevice;
+    const config = DEVICE_CONFIGS[newDevice];
+
+    document.getElementById('appTitle').textContent = config.name;
+    document.getElementById('panel1Title').textContent = config.panel1Title;
+    document.getElementById('panel1Icon').textContent = config.panel1Icon;
+    document.getElementById('panel2Title').textContent = config.panel2Title;
+    document.getElementById('panel2Icon').textContent = config.panel2Icon;
+
+    const container = document.getElementById('dataContainers');
+    if (config.hasAQI) {
+        document.getElementById('aqiPanel').style.display = 'flex';
+        container.classList.remove('no-aqi');
+    } else {
+        document.getElementById('aqiPanel').style.display = 'none';
+        container.classList.add('no-aqi');
     }
 
-    // --- Data Fetching (API Integration) ---
-    async function fetchHistoricalData(deviceId) {
-        try {
-            if (chartInstance) document.getElementById('historyChart').style.opacity = '0.3';
-            
-            let res = await fetch(`https://vtg0j85nv4.execute-api.us-east-1.amazonaws.com/device/${deviceId}/graph/hour`);
-            if (res.ok) {
-                let json = await res.json();
-                if (json && json.data) {
-                    let config = DEVICE_CONFIGS[deviceId];
-                    telemetryHistory[deviceId] = json.data.map(item => {
-                        let timeStr = item.date ? item.date.split(',')[1] : '';
-                        let aqi = null;
-                        if(config.hasAQI) {
-                            let pm25Scale = config.sensors['d5'] ? config.sensors['d5'].scale : 1;
-                            let pm10Scale = config.sensors['d6'] ? config.sensors['d6'].scale : 1;
-                            let pm25 = item['d5'] ? Number(item['d5']) / pm25Scale : 0;
-                            let pm10 = item['d6'] ? Number(item['d6']) / pm10Scale : 0;
-                            aqi = calculateAQI(pm25, pm10);
+    document.getElementById('waterGrid').innerHTML = '';
+    document.getElementById('airGrid').innerHTML = '';
+
+    populateChartDropdown();
+    state.activeMetric = config.defaultMetric;
+    document.getElementById('chartMetricSelect').value = state.activeMetric;
+
+    container.style.display = 'none';
+    document.getElementById('loadingState').style.display = 'block';
+    document.getElementById('loadingText').textContent = `Waiting for live telemetry packet from ${newDevice}...`;
+
+    fetchHistoricalData(newDevice);
+
+    // Re-subscribe to new device, unsubscribe old
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        if (!initial && previousDevice !== newDevice) {
+            try { state.ws.send(JSON.stringify({ action: 'unsubscribe', deviceId: previousDevice })); } catch (_) {}
+        }
+        try { state.ws.send(JSON.stringify({ action: 'subscribe', deviceId: newDevice })); } catch (_) {}
+    }
+}
+
+function populateChartDropdown() {
+    const config = DEVICE_CONFIGS[state.activeDevice];
+    const select = document.getElementById('chartMetricSelect');
+    select.innerHTML = '';
+
+    // Add AQI option first if device supports it
+    if (config.hasAQI) {
+        const aqiOpt = document.createElement('option');
+        aqiOpt.value = 'aqi';
+        aqiOpt.textContent = '★ Air Quality Index (AQI)';
+        select.appendChild(aqiOpt);
+    }
+
+    // Group sensors by category for clearer browsing
+    const groups = {};
+    Object.keys(config.sensors).forEach(key => {
+        const s = config.sensors[key];
+        const g = s.group || 'Sensors';
+        if (!groups[g]) groups[g] = [];
+        groups[g].push({ key, ...s });
+    });
+
+    Object.keys(groups).sort().forEach(groupName => {
+        const og = document.createElement('optgroup');
+        og.label = groupName;
+        groups[groupName].forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.key;
+            opt.textContent = `${s.icon} ${s.name}${s.unit ? ' · ' + s.unit : ''} (${s.key})`;
+            og.appendChild(opt);
+        });
+        select.appendChild(og);
+    });
+}
+
+function onMetricChange() {
+    state.activeMetric = document.getElementById('chartMetricSelect').value;
+    renderChart();
+    renderStats();
+    highlightChartingCard();
+}
+
+function toggleLive() {
+    state.livePaused = !state.livePaused;
+    const btn = document.getElementById('liveBtn');
+    const label = document.getElementById('liveBtnLabel');
+    if (state.livePaused) {
+        btn.classList.remove('is-active');
+        label.textContent = 'Paused';
+    } else {
+        btn.classList.add('is-active');
+        label.textContent = 'Live';
+        scheduleChartUpdate();
+    }
+}
+
+/* ============================================================
+   API — historical fetch with range fallback
+   ============================================================ */
+async function fetchHistoricalData(deviceId) {
+    const url = `${API_BASE}/device/${deviceId}/graph/hour`;
+    const canvas = document.getElementById('historyChart');
+    if (state.chart) canvas.style.opacity = '0.35';
+    setNotice('Fetching 1H archive…');
+
+    try {
+        const res = await fetch(url, { method: 'GET', mode: 'cors' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const json = await res.json();
+        const rows = (json && json.data) || (Array.isArray(json) ? json : []);
+        if (!Array.isArray(rows)) throw new Error('Unexpected API shape');
+
+        const config = DEVICE_CONFIGS[deviceId];
+        const seen = new Set();
+        const processed = [];
+
+        for (const item of rows) {
+            if (!item || typeof item !== 'object') continue;
+            const t = parseTimestamp(item);
+            const key = (item.ts || item.date || '') + '';
+            if (key && seen.has(key)) continue;  // dedup
+            if (key) seen.add(key);
+            processed.push({
+                t,
+                time: extractTimeStr(item),
+                date: extractDateStr(item),
+                raw: item,
+                aqi: config.hasAQI ? aqiFromRaw(item, config) : null
+            });
+        }
+
+        // sort chronologically — robust across missing ts
+        processed.sort((a, b) => (a.t || 0) - (b.t || 0));
+        state.history[deviceId] = processed;
+
+        if (state.activeDevice === deviceId) {
+            renderChart();
+            renderStats();
+            setNotice(`${processed.length} pts • 1H • src: API`);
+        }
+    } catch (err) {
+        console.error(`[history] ${url}`, err);
+        setNotice(`Could not load 1H archive — ${err.message}`);
+        toast('Historical fetch failed. Showing live-only data.');
+    } finally {
+        canvas.style.opacity = '1';
+    }
+}
+
+/* ============================================================
+   AQI ENGINE (US EPA 2012 breakpoints — kept from original)
+   ============================================================ */
+function aqiFromRaw(item, config) {
+    const pm25Scale = config.sensors['d5']?.scale ?? 1;
+    const pm10Scale = config.sensors['d6']?.scale ?? 1;
+    const pm25 = item['d5'] != null ? Number(item['d5']) / pm25Scale : 0;
+    const pm10 = item['d6'] != null ? Number(item['d6']) / pm10Scale : 0;
+    return calculateAQI(pm25, pm10);
+}
+
+function calculateAQI(pm25, pm10) {
+    function calcIndex(Cp, bp) {
+        if (Cp == null || isNaN(Cp)) return 0;
+        for (let i = 0; i < bp.length; i++) {
+            if (Cp >= bp[i].cLow && Cp <= bp[i].cHigh) {
+                return Math.round(((bp[i].iHigh - bp[i].iLow) / (bp[i].cHigh - bp[i].cLow)) * (Cp - bp[i].cLow) + bp[i].iLow);
+            }
+        }
+        const max = bp[bp.length - 1];
+        if (Cp > max.cHigh) return Math.round(((max.iHigh - max.iLow) / (max.cHigh - max.cLow)) * (Cp - max.cLow) + max.iLow);
+        return 0;
+    }
+    const pm25_bp = [
+        { cLow: 0, cHigh: 12, iLow: 0, iHigh: 50 },
+        { cLow: 12.1, cHigh: 35.4, iLow: 51, iHigh: 100 },
+        { cLow: 35.5, cHigh: 55.4, iLow: 101, iHigh: 150 },
+        { cLow: 55.5, cHigh: 150.4, iLow: 151, iHigh: 200 },
+        { cLow: 150.5, cHigh: 250.4, iLow: 201, iHigh: 300 },
+        { cLow: 250.5, cHigh: 500.4, iLow: 301, iHigh: 500 }
+    ];
+    const pm10_bp = [
+        { cLow: 0, cHigh: 54, iLow: 0, iHigh: 50 },
+        { cLow: 55, cHigh: 154, iLow: 51, iHigh: 100 },
+        { cLow: 155, cHigh: 254, iLow: 101, iHigh: 150 },
+        { cLow: 255, cHigh: 354, iLow: 151, iHigh: 200 },
+        { cLow: 355, cHigh: 424, iLow: 201, iHigh: 300 },
+        { cLow: 425, cHigh: 604, iLow: 301, iHigh: 500 }
+    ];
+    return Math.max(calcIndex(pm25, pm25_bp), calcIndex(pm10, pm10_bp));
+}
+
+function getAQIMeta(aqi) {
+    if (aqi <= 50)  return { text: 'Good',           color: '#10b981', bg: '#f0fdf4', border: '#a7f3d0' };
+    if (aqi <= 100) return { text: 'Moderate',       color: '#eab308', bg: '#fefce8', border: '#fef08a' };
+    if (aqi <= 150) return { text: 'Sensitive',      color: '#f97316', bg: '#fff7ed', border: '#fed7aa' };
+    if (aqi <= 200) return { text: 'Unhealthy',      color: '#ef4444', bg: '#fef2f2', border: '#fecaca' };
+    if (aqi <= 300) return { text: 'Very Unhealthy', color: '#a855f7', bg: '#faf5ff', border: '#e9d5ff' };
+    return                  { text: 'Hazardous',     color: '#9f1239', bg: '#fff1f2', border: '#fecdd3' };
+}
+
+/* ============================================================
+   TIMESTAMP PARSING — robust for multiple shapes
+   ============================================================ */
+function parseTimestamp(item) {
+    if (!item) return 0;
+    if (item.ts != null) {
+        const n = Number(item.ts);
+        if (!isNaN(n)) return n < 1e12 ? n * 1000 : n; // seconds vs ms
+    }
+    if (item.timestamp != null) {
+        const n = Number(item.timestamp);
+        if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
+    }
+    if (item.date) {
+        // "DD/MM/YYYY, HH:MM:SS" or "YYYY-MM-DD HH:MM:SS"
+        const parsed = Date.parse(item.date);
+        if (!isNaN(parsed)) return parsed;
+        // try DD/MM/YYYY format
+        const m = String(item.date).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2}):(\d{2}):(\d{2})/);
+        if (m) return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +m[6]).getTime();
+    }
+    return 0;
+}
+
+function extractTimeStr(item) {
+    if (item.date && typeof item.date === 'string' && item.date.includes(',')) {
+        return item.date.split(',')[1].trim();
+    }
+    const t = parseTimestamp(item);
+    if (t) return new Date(t).toLocaleTimeString('en-GB', { hour12: false });
+    return '--:--:--';
+}
+
+function extractDateStr(item) {
+    if (item.date && typeof item.date === 'string' && item.date.includes(',')) {
+        return item.date.split(',')[0].trim();
+    }
+    const t = parseTimestamp(item);
+    if (t) return new Date(t).toLocaleDateString('en-GB');
+    return '';
+}
+
+/* ============================================================
+   LIVE INGESTION
+   ============================================================ */
+function processIncomingData(data) {
+    const config = DEVICE_CONFIGS[state.activeDevice];
+    const aqi = config.hasAQI ? aqiFromRaw(data, config) : null;
+    const t = parseTimestamp(data) || Date.now();
+    const point = {
+        t,
+        time: extractTimeStr(data) || new Date(t).toLocaleTimeString('en-GB', { hour12: false }),
+        date: extractDateStr(data) || new Date(t).toLocaleDateString('en-GB'),
+        raw: data,
+        aqi
+    };
+
+    const hist = state.history[state.activeDevice];
+
+    // dedup: skip if last point has same timestamp
+    if (hist.length && hist[hist.length - 1].t === point.t && point.t !== 0) {
+        hist[hist.length - 1] = point; // overwrite as latest authoritative
+    } else {
+        hist.push(point);
+    }
+    if (hist.length > MAX_HISTORY_POINTS) hist.shift();
+
+    state.packetCount++;
+    state.lastPacketAt = Date.now();
+    document.getElementById('meta-count').textContent = state.packetCount.toLocaleString();
+
+    renderCards(data, aqi, config);
+    renderMeta(point);
+    if (!state.livePaused) {
+        scheduleChartUpdate();
+    }
+}
+
+function scheduleChartUpdate() {
+    if (state.pendingChartUpdate) return;
+    const elapsed = Date.now() - state.lastChartUpdate;
+    const wait = Math.max(0, CHART_UPDATE_MIN_INTERVAL - elapsed);
+    state.pendingChartUpdate = true;
+    setTimeout(() => {
+        state.pendingChartUpdate = false;
+        state.lastChartUpdate = Date.now();
+        renderChart('none');
+        renderStats();
+    }, wait);
+}
+
+/* ============================================================
+   CHART
+   ============================================================ */
+function initChart() {
+    const ctx = document.getElementById('historyChart').getContext('2d');
+    state.chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Metric',
+                data: [],
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderWidth: 2,
+                fill: true,
+                tension: 0.35,
+                spanGaps: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#0f172a',
+                    titleFont: { family: "'Inter', sans-serif", size: 12, weight: 700 },
+                    bodyFont: { family: "'JetBrains Mono', monospace", size: 12 },
+                    padding: 10,
+                    cornerRadius: 8,
+                    displayColors: false,
+                    callbacks: {
+                        title: (items) => {
+                            const i = items[0].dataIndex;
+                            const pt = state.history[state.activeDevice][i];
+                            if (!pt) return '';
+                            return `${pt.date || ''} ${pt.time || ''}`.trim();
+                        },
+                        label: (ctx) => {
+                            const meta = currentMetricMeta();
+                            const v = ctx.parsed.y;
+                            if (v == null || isNaN(v)) return `${meta.label}: —`;
+                            return `${meta.label}: ${v}${meta.unit ? ' ' + meta.unit : ''}`;
                         }
-                        return { time: timeStr, raw: item, aqi: aqi };
-                    });
-                    
-                    // Sort chronologically by timestamp if available
-                    telemetryHistory[deviceId].sort((a, b) => a.raw.ts - b.raw.ts);
-                }
-            }
-        } catch (e) {
-            console.error(`Failed to load historical API data for ${deviceId}:`, e);
-        } finally {
-            if (ACTIVE_DEVICE === deviceId) {
-                renderChart();
-                document.getElementById('historyChart').style.opacity = '1';
-            }
-        }
-    }
-
-    // --- Device Switching ---
-    function handleDeviceSwitch(newDevice) {
-        ACTIVE_DEVICE = newDevice;
-        let config = DEVICE_CONFIGS[ACTIVE_DEVICE];
-        
-        document.getElementById('appTitle').textContent = config.name;
-        
-        // Update Panel Headers
-        document.getElementById('panel1Title').textContent = config.panel1Title;
-        document.getElementById('panel1Icon').textContent = config.panel1Icon;
-        document.getElementById('panel2Title').textContent = config.panel2Title;
-        document.getElementById('panel2Icon').textContent = config.panel2Icon;
-
-        // Manage AQI Panel visibility and Grid styling
-        let container = document.getElementById('dataContainers');
-        if(config.hasAQI) {
-            document.getElementById('aqiPanel').style.display = 'flex';
-            container.classList.remove('no-aqi');
-        } else {
-            document.getElementById('aqiPanel').style.display = 'none';
-            container.classList.add('no-aqi');
-        }
-
-        // Reset Grids
-        document.getElementById('waterGrid').innerHTML = '';
-        document.getElementById('airGrid').innerHTML = '';
-        
-        // Fetch historical data for the newly selected device
-        fetchHistoricalData(ACTIVE_DEVICE);
-        populateChartDropdown();
-
-        // Show loading state while waiting for new socket data
-        container.style.display = 'none';
-        document.getElementById('loadingState').style.display = 'block';
-        document.getElementById('loadingText').textContent = `Waiting for live telemetry packet from ${ACTIVE_DEVICE}...`;
-
-        // Send subscription change to active websocket
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ action: 'subscribe', deviceId: ACTIVE_DEVICE }));
-        }
-    }
-
-    function populateChartDropdown() {
-        let select = document.getElementById('chartMetricSelect');
-        select.innerHTML = '';
-        DEVICE_CONFIGS[ACTIVE_DEVICE].chartMetrics.forEach(m => {
-            let opt = document.createElement('option');
-            opt.value = m.value;
-            opt.textContent = m.label;
-            select.appendChild(opt);
-        });
-    }
-
-    // --- WebSocket ---
-    function showDashboard() {
-        document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('mainDashboard').style.display = 'block';
-        document.getElementById('appTitle').textContent = DEVICE_CONFIGS[ACTIVE_DEVICE].name;
-        
-        fetchHistoricalData(ACTIVE_DEVICE);
-        connectWebSocket();
-    }
-    
-    function connectWebSocket() {
-        if (ws && ws.readyState === WebSocket.OPEN) return;
-        ws = new WebSocket(WS_URL);
-        ws.onopen = () => { 
-            updateStatus('Live', 'connected'); 
-            ws.send(JSON.stringify({ action: 'subscribe', deviceId: ACTIVE_DEVICE }));
-            if(reconnectInterval) clearInterval(reconnectInterval);
-        };
-        ws.onclose = () => { updateStatus('Reconnecting...', 'disconnected'); if(!reconnectInterval) reconnectInterval = setInterval(connectWebSocket, 5000); };
-        ws.onerror = () => { updateStatus('Error', 'disconnected'); };
-        ws.onmessage = (e) => {
-            try {
-                let parsed = JSON.parse(e.data);
-                let data = parsed.type === 'deviceData' ? parsed.data : (parsed.data || parsed);
-                
-                let incomingDevice = data.d || ACTIVE_DEVICE;
-                if (data && typeof data === 'object' && incomingDevice === ACTIVE_DEVICE) {
-                    processIncomingData(data);
-                }
-            } catch(err) {}
-        };
-    }
-    
-    function updateStatus(text, state) {
-        document.getElementById('statusText').textContent = text;
-        document.getElementById('statusPill').className = `status-pill ${state}`;
-    }
-
-    // --- AQI Engine ---
-    function calculateAQI(pm25, pm10) {
-        function calcIndex(Cp, bp) {
-            if (Cp === undefined || isNaN(Cp)) return 0;
-            for (let i = 0; i < bp.length; i++) {
-                if (Cp >= bp[i].cLow && Cp <= bp[i].cHigh) {
-                    return Math.round(((bp[i].iHigh - bp[i].iLow) / (bp[i].cHigh - bp[i].cLow)) * (Cp - bp[i].cLow) + bp[i].iLow);
-                }
-            }
-            let max = bp[bp.length - 1];
-            if(Cp > max.cHigh) return Math.round(((max.iHigh - max.iLow) / (max.cHigh - max.cLow)) * (Cp - max.cLow) + max.iLow);
-            return 0;
-        }
-        const pm25_bp = [ {cLow:0, cHigh:12, iLow:0, iHigh:50}, {cLow:12.1, cHigh:35.4, iLow:51, iHigh:100}, {cLow:35.5, cHigh:55.4, iLow:101, iHigh:150}, {cLow:55.5, cHigh:150.4, iLow:151, iHigh:200}, {cLow:150.5, cHigh:250.4, iLow:201, iHigh:300}, {cLow:250.5, cHigh:500.4, iLow:301, iHigh:500} ];
-        const pm10_bp = [ {cLow:0, cHigh:54, iLow:0, iHigh:50}, {cLow:55, cHigh:154, iLow:51, iHigh:100}, {cLow:155, cHigh:254, iLow:101, iHigh:150}, {cLow:255, cHigh:354, iLow:151, iHigh:200}, {cLow:355, cHigh:424, iLow:201, iHigh:300}, {cLow:425, cHigh:604, iLow:301, iHigh:500} ];
-        return Math.max(calcIndex(pm25, pm25_bp), calcIndex(pm10, pm10_bp));
-    }
-
-    function getAQIMeta(aqi) {
-        if (aqi <= 50) return { text: 'Good', color: '#10b981', bg: '#f0fdf4', border: '#a7f3d0' }; 
-        if (aqi <= 100) return { text: 'Moderate', color: '#eab308', bg: '#fefce8', border: '#fef08a' }; 
-        if (aqi <= 150) return { text: 'Sensitive', color: '#f97316', bg: '#fff7ed', border: '#fed7aa' }; 
-        if (aqi <= 200) return { text: 'Unhealthy', color: '#ef4444', bg: '#fef2f2', border: '#fecaca' }; 
-        if (aqi <= 300) return { text: 'Very Unhealthy', color: '#a855f7', bg: '#faf5ff', border: '#e9d5ff' }; 
-        return { text: 'Hazardous', color: '#9f1239', bg: '#fff1f2', border: '#fecdd3' }; 
-    }
-
-    // --- Live Processing & Chart Engine ---
-    function processIncomingData(data) {
-        let config = DEVICE_CONFIGS[ACTIVE_DEVICE];
-        let aqi = null;
-        
-        if(config.hasAQI) {
-            let pm25Scale = config.sensors['d5'] ? config.sensors['d5'].scale : 1;
-            let pm10Scale = config.sensors['d6'] ? config.sensors['d6'].scale : 1;
-            let pm25 = data['d5'] ? Number(data['d5']) / pm25Scale : 0;
-            let pm10 = data['d6'] ? Number(data['d6']) / pm10Scale : 0;
-            aqi = calculateAQI(pm25, pm10);
-        }
-
-        let timeStr = data.date ? data.date.split(',')[1] : new Date().toLocaleTimeString('en-US', { hour12: false, hour: "numeric", minute: "numeric", second: "numeric" });
-        
-        telemetryHistory[ACTIVE_DEVICE].push({ time: timeStr, raw: data, aqi: aqi });
-        
-        if(telemetryHistory[ACTIVE_DEVICE].length > MAX_HISTORY_POINTS) {
-            telemetryHistory[ACTIVE_DEVICE].shift();
-        }
-
-        renderCards(data, aqi, config);
-        renderChart();
-    }
-
-    function initChart() {
-        const ctx = document.getElementById('historyChart').getContext('2d');
-        chartInstance = new Chart(ctx, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Metric', data: [], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4 }] },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { maxTicksLimit: 12, font: {family: "'JetBrains Mono', monospace", size: 10} } },
-                    y: { beginAtZero: false, grid: { color: '#e2e8f0' }, ticks: { font: {family: "'JetBrains Mono', monospace", size: 11} } }
-                }
-            }
-        });
-    }
-
-    function renderChart() {
-        if(!chartInstance) return;
-        let selectedMetric = document.getElementById('chartMetricSelect').value;
-        let activeData = telemetryHistory[ACTIVE_DEVICE];
-        let config = DEVICE_CONFIGS[ACTIVE_DEVICE];
-        
-        let labels = activeData.map(d => d.time);
-        let plotData = activeData.map(d => {
-            if (selectedMetric === 'aqi') return d.aqi;
-            let val = Number(d.raw[selectedMetric]);
-            let scale = config.sensors[selectedMetric] ? config.sensors[selectedMetric].scale : 1;
-            return isNaN(val) ? null : parseFloat((val / scale).toFixed(3));
-        });
-
-        chartInstance.data.labels = labels;
-        chartInstance.data.datasets[0].data = plotData;
-        
-        if(selectedMetric === 'aqi' && plotData.length > 0) {
-            let latestAqi = plotData[plotData.length - 1];
-            let meta = getAQIMeta(latestAqi);
-            chartInstance.data.datasets[0].borderColor = meta.color;
-            chartInstance.data.datasets[0].backgroundColor = meta.color + '22';
-        } else {
-            chartInstance.data.datasets[0].borderColor = '#2563eb';
-            chartInstance.data.datasets[0].backgroundColor = 'rgba(37, 99, 235, 0.1)';
-        }
-
-        chartInstance.update();
-    }
-
-    // --- Core UI Rendering ---
-    function renderCards(data, aqi, config) {
-        if(data.date) {
-            let parts = data.date.includes(',') ? data.date.split(',') : [data.date, '--:--:--'];
-            document.getElementById('meta-date').textContent = parts[0];
-            document.getElementById('meta-time').textContent = parts[1];
-        }
-
-        document.getElementById('loadingState').style.display = 'none';
-        document.getElementById('dataContainers').style.display = 'grid';
-
-        if(config.hasAQI && aqi !== null) {
-            let meta = getAQIMeta(aqi);
-            document.getElementById('aqiValueDisplay').textContent = aqi;
-            document.getElementById('aqiValueDisplay').style.color = meta.color;
-            document.getElementById('aqiTextDisplay').textContent = meta.text;
-            document.getElementById('aqiTextDisplay').style.color = meta.color;
-            
-            let panel = document.getElementById('aqiPanel');
-            panel.style.background = `linear-gradient(180deg, ${meta.bg} 0%, #ffffff 100%)`;
-            panel.style.borderColor = meta.border;
-
-            let arcOffset = 126 - (Math.min(aqi / 500, 1) * 126);
-            let arcElement = document.getElementById('aqiArc');
-            arcElement.style.strokeDashoffset = arcOffset;
-            arcElement.style.stroke = meta.color;
-        }
-
-        Object.keys(config.sensors).forEach(key => {
-            if (data[key] !== undefined && data[key] !== null) {
-                const sensorConf = config.sensors[key];
-                const rawValue = Number(data[key]);
-                let finalValue = isNaN(rawValue) ? "Err" : parseFloat((rawValue / sensorConf.scale).toFixed(3));
-
-                let cardId = `card-${key}`;
-                let card = document.getElementById(cardId);
-                
-                if (!card) {
-                    card = document.createElement('div');
-                    card.className = `card`;
-                    card.id = cardId;
-                    card.innerHTML = `
-                        <div class="card-live-dot" title="Sensor Active"></div>
-                        <div class="card-header">
-                            <div class="icon-box">${sensorConf.icon}</div>
-                            <div class="card-title-group">
-                                <span class="card-title">${sensorConf.name}</span>
-                                <span class="card-key">Key: ${key}</span>
-                            </div>
-                        </div>
-                        <div class="card-value-wrap">
-                            <span class="card-value">${finalValue}</span>
-                            <span class="card-unit">${sensorConf.unit}</span>
-                        </div>
-                    `;
-                    
-                    if(config.panel1Keys.includes(key)) {
-                        document.getElementById('waterGrid').appendChild(card);
-                    } else if(config.panel2Keys.includes(key)) {
-                        document.getElementById('airGrid').appendChild(card);
                     }
-                } else {
-                    card.querySelector('.card-value').textContent = finalValue;
+                },
+                annotation: { annotations: {} }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        maxTicksLimit: 10,
+                        autoSkip: true,
+                        font: { family: "'JetBrains Mono', monospace", size: 10 },
+                        color: '#94a3b8'
+                    }
+                },
+                y: {
+                    beginAtZero: false,
+                    grid: { color: 'rgba(226, 232, 240, 0.6)' },
+                    ticks: { font: { family: "'JetBrains Mono', monospace", size: 11 }, color: '#475569' }
                 }
             }
-        });
+        }
+    });
+}
+
+function currentMetricMeta() {
+    const config = DEVICE_CONFIGS[state.activeDevice];
+    const m = state.activeMetric;
+    if (m === 'aqi') return { label: 'AQI', unit: '' };
+    const s = config.sensors[m];
+    if (!s) return { label: m, unit: '' };
+    return { label: s.name, unit: s.unit, scale: s.scale, icon: s.icon };
+}
+
+function computeSeries() {
+    const config = DEVICE_CONFIGS[state.activeDevice];
+    const data = state.history[state.activeDevice];
+    const m = state.activeMetric;
+
+    const labels = new Array(data.length);
+    const values = new Array(data.length);
+    for (let i = 0; i < data.length; i++) {
+        const d = data[i];
+        labels[i] = d.time;
+        if (m === 'aqi') {
+            values[i] = d.aqi;
+        } else {
+            const v = Number(d.raw[m]);
+            const scale = config.sensors[m]?.scale ?? 1;
+            values[i] = isNaN(v) ? null : parseFloat((v / scale).toFixed(3));
+        }
     }
+    return { labels, values };
+}
+
+function renderChart(updateMode = 'none') {
+    if (!state.chart) return;
+    const { labels, values } = computeSeries();
+    const meta = currentMetricMeta();
+
+    state.chart.data.labels = labels;
+    state.chart.data.datasets[0].data = values;
+    state.chart.data.datasets[0].label = meta.label;
+
+    // Color theming
+    if (state.activeMetric === 'aqi' && values.length) {
+        const last = values[values.length - 1];
+        if (last != null) {
+            const m = getAQIMeta(last);
+            state.chart.data.datasets[0].borderColor = m.color;
+            state.chart.data.datasets[0].backgroundColor = m.color + '22';
+        }
+        // AQI threshold annotations
+        state.chart.options.plugins.annotation.annotations = aqiAnnotations();
+    } else {
+        state.chart.data.datasets[0].borderColor = '#2563eb';
+        state.chart.data.datasets[0].backgroundColor = 'rgba(37, 99, 235, 0.10)';
+        state.chart.options.plugins.annotation.annotations = minMaxAnnotations(values, labels);
+    }
+
+    state.chart.options.scales.y.title = {
+        display: !!meta.unit,
+        text: meta.unit || '',
+        font: { family: "'Inter', sans-serif", size: 11, weight: 600 },
+        color: '#475569'
+    };
+
+    state.chart.update(updateMode);
+}
+
+function aqiAnnotations() {
+    const lines = [
+        { y: 50,  c: '#10b981', t: 'Good' },
+        { y: 100, c: '#eab308', t: 'Moderate' },
+        { y: 150, c: '#f97316', t: 'Sensitive' },
+        { y: 200, c: '#ef4444', t: 'Unhealthy' },
+        { y: 300, c: '#a855f7', t: 'Very Unhealthy' }
+    ];
+    const out = {};
+    lines.forEach((l, i) => {
+        out['aqi_' + i] = {
+            type: 'line',
+            yMin: l.y, yMax: l.y,
+            borderColor: l.c + '55',
+            borderWidth: 1,
+            borderDash: [4, 4],
+            label: {
+                display: true,
+                content: l.t,
+                position: 'end',
+                backgroundColor: l.c + 'EE',
+                color: '#fff',
+                font: { family: "'Inter', sans-serif", size: 9, weight: 700 },
+                padding: { top: 2, bottom: 2, left: 5, right: 5 },
+                borderRadius: 3
+            }
+        };
+    });
+    return out;
+}
+
+function minMaxAnnotations(values, labels) {
+    const valid = values.map((v, i) => ({ v, i })).filter(x => x.v != null && !isNaN(x.v));
+    if (valid.length < 2) return {};
+    let lo = valid[0], hi = valid[0];
+    for (const x of valid) {
+        if (x.v < lo.v) lo = x;
+        if (x.v > hi.v) hi = x;
+    }
+    return {
+        max: {
+            type: 'point', xValue: labels[hi.i], yValue: hi.v,
+            backgroundColor: '#10b981', borderColor: '#fff', borderWidth: 2, radius: 5
+        },
+        min: {
+            type: 'point', xValue: labels[lo.i], yValue: lo.v,
+            backgroundColor: '#ef4444', borderColor: '#fff', borderWidth: 2, radius: 5
+        }
+    };
+}
+
+/* ============================================================
+   STATS STRIP
+   ============================================================ */
+function renderStats() {
+    const { values } = computeSeries();
+    const meta = currentMetricMeta();
+    const valid = values.filter(v => v != null && !isNaN(v));
+
+    const setStat = (id, value, klass) => {
+        const el = document.getElementById(id);
+        el.className = 'stat-value' + (klass ? ' ' + klass : '');
+        el.innerHTML = value;
+    };
+
+    if (!valid.length) {
+        ['statCurrent', 'statMin', 'statMax', 'statAvg', 'statDelta'].forEach(id => setStat(id, '—'));
+        return;
+    }
+
+    const u = meta.unit ? ` <span class="unit">${meta.unit}</span>` : '';
+    const fmt = (n) => Number.isInteger(n) ? n.toString() : n.toFixed(2);
+    const cur = valid[valid.length - 1];
+    const first = valid[0];
+    const min = Math.min(...valid);
+    const max = Math.max(...valid);
+    const avg = valid.reduce((a, b) => a + b, 0) / valid.length;
+    const delta = cur - first;
+    const deltaPct = first !== 0 ? (delta / Math.abs(first)) * 100 : 0;
+
+    setStat('statCurrent', fmt(cur) + u);
+    setStat('statMin',     fmt(min) + u);
+    setStat('statMax',     fmt(max) + u);
+    setStat('statAvg',     fmt(avg) + u);
+
+    const sign = delta > 0 ? '+' : '';
+    const klass = delta > 0 ? 'delta-up' : (delta < 0 ? 'delta-down' : '');
+    setStat('statDelta', `${sign}${fmt(delta)} <span class="unit">(${sign}${deltaPct.toFixed(1)}%)</span>`, klass);
+}
+
+/* ============================================================
+   CARDS — value-diff updates only, plus click-to-chart
+   ============================================================ */
+function renderCards(data, aqi, config) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('dataContainers').style.display = 'grid';
+
+    if (config.hasAQI && aqi != null) {
+        const meta = getAQIMeta(aqi);
+        const aqiVal = document.getElementById('aqiValueDisplay');
+        const aqiText = document.getElementById('aqiTextDisplay');
+        if (aqiVal.textContent != aqi) aqiVal.textContent = aqi;
+        aqiVal.style.color = meta.color;
+        aqiText.textContent = meta.text;
+        aqiText.style.color = meta.color;
+        const panel = document.getElementById('aqiPanel');
+        panel.style.background = `linear-gradient(180deg, ${meta.bg} 0%, #ffffff 100%)`;
+        panel.style.borderColor = meta.border;
+        const arc = document.getElementById('aqiArc');
+        arc.style.strokeDashoffset = 126 - (Math.min(aqi / 500, 1) * 126);
+        arc.style.stroke = meta.color;
+    }
+
+    Object.keys(config.sensors).forEach(key => {
+        if (data[key] === undefined || data[key] === null) return;
+        const sc = config.sensors[key];
+        const raw = Number(data[key]);
+        const finalVal = isNaN(raw) ? 'Err' : parseFloat((raw / sc.scale).toFixed(3));
+        const cardId = `card-${key}`;
+        let card = document.getElementById(cardId);
+
+        if (!card) {
+            card = document.createElement('div');
+            card.className = 'card';
+            card.id = cardId;
+            card.dataset.key = key;
+            card.title = `Click to chart ${sc.name}`;
+            card.addEventListener('click', () => {
+                state.activeMetric = key;
+                document.getElementById('chartMetricSelect').value = key;
+                renderChart();
+                renderStats();
+                highlightChartingCard();
+            });
+            card.innerHTML = `
+                <div class="card-live-dot" title="Sensor Active"></div>
+                <div class="card-header">
+                    <div class="icon-box">${sc.icon}</div>
+                    <div class="card-title-group">
+                        <span class="card-title">${sc.name}</span>
+                        <span class="card-key">Key: ${key}</span>
+                    </div>
+                </div>
+                <div class="card-value-wrap">
+                    <span class="card-value">${finalVal}</span>
+                    <span class="card-unit">${sc.unit}</span>
+                </div>
+            `;
+            (config.panel1Keys.includes(key) ? document.getElementById('waterGrid') :
+             config.panel2Keys.includes(key) ? document.getElementById('airGrid')   : null)
+                ?.appendChild(card);
+        } else {
+            const valEl = card.querySelector('.card-value');
+            const cur = valEl.textContent;
+            const next = String(finalVal);
+            if (cur !== next) {
+                valEl.textContent = next;
+                card.classList.remove('is-flashing');
+                // re-trigger CSS animation
+                void card.offsetWidth;
+                card.classList.add('is-flashing');
+            }
+        }
+    });
+    highlightChartingCard();
+}
+
+function highlightChartingCard() {
+    document.querySelectorAll('.card').forEach(c => {
+        c.classList.toggle('is-charting', c.dataset.key === state.activeMetric);
+    });
+}
+
+function renderMeta(point) {
+    document.getElementById('meta-date').textContent = point.date || '—';
+    document.getElementById('meta-time').textContent = point.time || '--:--:--';
+}
+
+function updatePacketAge() {
+    const el = document.getElementById('meta-age');
+    if (!state.lastPacketAt) { el.textContent = '—'; el.className = 'meta-value'; return; }
+    const age = Date.now() - state.lastPacketAt;
+    const sec = Math.floor(age / 1000);
+    let txt;
+    if (sec < 60) txt = sec + 's ago';
+    else if (sec < 3600) txt = Math.floor(sec / 60) + 'm ' + (sec % 60) + 's ago';
+    else txt = Math.floor(sec / 3600) + 'h ago';
+    el.textContent = txt;
+    el.className = 'meta-value ' + (age > DEAD_THRESHOLD_MS ? 'dead' : age > STALE_THRESHOLD_MS ? 'stale' : 'fresh');
+
+    // Also reflect on card live dots
+    document.querySelectorAll('.card-live-dot').forEach(d => {
+        d.classList.toggle('stale', age > STALE_THRESHOLD_MS);
+    });
+}
+
+/* ============================================================
+   WEBSOCKET — exponential backoff, robust message handling
+   ============================================================ */
+function connectWebSocket() {
+    if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) return;
+    let ws;
+    try { ws = new WebSocket(WS_URL); } catch (e) { console.error('[ws] open failed', e); scheduleReconnect(); return; }
+    state.ws = ws;
+
+    ws.onopen = () => {
+        state.reconnectAttempt = 0;
+        if (state.reconnectTimer) { clearTimeout(state.reconnectTimer); state.reconnectTimer = null; }
+        updateStatus('Live', 'connected');
+        try { ws.send(JSON.stringify({ action: 'subscribe', deviceId: state.activeDevice })); } catch (_) {}
+    };
+
+    ws.onclose = () => {
+        updateStatus('Reconnecting…', 'reconnecting');
+        scheduleReconnect();
+    };
+
+    ws.onerror = (e) => {
+        console.error('[ws] error', e);
+        updateStatus('Error', 'disconnected');
+    };
+
+    ws.onmessage = (e) => {
+        let parsed;
+        try { parsed = JSON.parse(e.data); }
+        catch (err) { console.warn('[ws] non-JSON message', err, e.data); return; }
+
+        // Normalize wrapper shapes
+        const data = parsed.type === 'deviceData' ? parsed.data : (parsed.data || parsed);
+        if (!data || typeof data !== 'object') return;
+
+        const incomingDevice = data.d || data.deviceId || data.device || parsed.deviceId || state.activeDevice;
+        if (incomingDevice !== state.activeDevice) return;
+        processIncomingData(data);
+    };
+}
+
+function scheduleReconnect() {
+    if (state.reconnectTimer) return;
+    state.reconnectAttempt = Math.min(state.reconnectAttempt + 1, 8);
+    const wait = Math.min(30000, 1000 * Math.pow(2, state.reconnectAttempt - 1));
+    state.reconnectTimer = setTimeout(() => {
+        state.reconnectTimer = null;
+        connectWebSocket();
+    }, wait);
+}
+
+function updateStatus(text, cls) {
+    document.getElementById('statusText').textContent = text;
+    document.getElementById('statusPill').className = `status-pill ${cls}`;
+}
+
+/* ============================================================
+   EXPORT & UTILS
+   ============================================================ */
+function exportCSV() {
+    const data = state.history[state.activeDevice];
+    if (!data.length) { toast('No data to export.'); return; }
+    const config = DEVICE_CONFIGS[state.activeDevice];
+    const sensorKeys = Object.keys(config.sensors);
+
+    const headers = ['timestamp', 'date', 'time'];
+    if (config.hasAQI) headers.push('aqi');
+    sensorKeys.forEach(k => headers.push(`${k}_${config.sensors[k].name.replace(/\s+/g, '_')}`));
+
+    const rows = [headers.join(',')];
+    for (const pt of data) {
+        const row = [pt.t || '', pt.date || '', pt.time || ''];
+        if (config.hasAQI) row.push(pt.aqi == null ? '' : pt.aqi);
+        for (const k of sensorKeys) {
+            const v = pt.raw[k];
+            if (v == null || v === '') { row.push(''); continue; }
+            const scale = config.sensors[k].scale || 1;
+            const num = Number(v);
+            row.push(isNaN(num) ? v : (num / scale).toFixed(3));
+        }
+        rows.push(row.map(c => {
+            const s = String(c);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }).join(','));
+    }
+
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${state.activeDevice}_1h_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+    toast(`Exported ${data.length} rows.`);
+}
+
+function setNotice(msg) {
+    document.getElementById('chartNotice').textContent = msg;
+}
+
+let toastTimer = null;
+function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
 </script>
 
 </body>
